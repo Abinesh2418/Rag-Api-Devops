@@ -1,0 +1,217 @@
+name: RAG CI Pipeline
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  path-filter:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      rag_changed: ${{ steps.filter.outputs.rag_changed }}
+    steps:
+      - uses: actions/checkout@v4
+        if: github.event_name == 'push'
+        with:
+          fetch-depth: 2
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            rag_changed:
+              - 'docs/**'
+              - 'app.py'
+              - 'embed_docs.py'
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Ruff
+        run: pip install ruff
+
+      - name: Run Ruff check
+        run: ruff check .
+
+      - name: Run Ruff format check
+        run: ruff format --check .
+
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest pytest-cov httpx
+
+      - name: Run unit tests with coverage
+        run: pytest tests/ -v --cov=app --cov-report=term-missing --cov-report=xml
+        env:
+          USE_MOCK_LLM: "1"
+
+      - name: Check coverage threshold
+        run: coverage report --fail-under=80
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run pip-audit for vulnerability scanning
+        uses: pypa/gh-action-pip-audit@v1.1.0
+        with:
+          inputs: requirements.txt
+
+  integration:
+    needs: [path-filter, lint, unit-tests, security]
+    if: github.event_name == 'pull_request' || needs.path-filter.outputs.rag_changed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Rebuild embeddings
+        run: python embed_docs.py
+
+      - name: Start API in mock mode
+        run: |
+          USE_MOCK_LLM=1 uvicorn app:app --host 0.0.0.0 --port 8000 &
+          sleep 5
+
+      - name: Run semantic tests
+        run: python semantic_test.py
+
+      - name: Success
+        run: echo "All tests passed! RAG quality maintained."
+
+  notify:
+    needs: [path-filter, lint, unit-tests, security, integration]
+    if: failure()
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get failed jobs summary
+        id: failed-jobs
+        run: |
+          FAILED_JOBS=""
+          if [ "${{ needs.path-filter.result }}" == "failure" ]; then
+            FAILED_JOBS="${FAILED_JOBS}- path-filter\n"
+          fi
+          if [ "${{ needs.lint.result }}" == "failure" ]; then
+            FAILED_JOBS="${FAILED_JOBS}- lint\n"
+          fi
+          if [ "${{ needs.unit-tests.result }}" == "failure" ]; then
+            FAILED_JOBS="${FAILED_JOBS}- unit-tests\n"
+          fi
+          if [ "${{ needs.security.result }}" == "failure" ]; then
+            FAILED_JOBS="${FAILED_JOBS}- security\n"
+          fi
+          if [ "${{ needs.integration.result }}" == "failure" ]; then
+            FAILED_JOBS="${FAILED_JOBS}- integration\n"
+          fi
+          echo "failed_jobs<<EOF" >> $GITHUB_OUTPUT
+          echo -e "$FAILED_JOBS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Comment PR on failure
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const failedJobs = `${{ steps.failed-jobs.outputs.failed_jobs }}`;
+            const body = `## CI Pipeline Failed
+
+            The following job(s) failed:
+            ${failedJobs}
+
+            **Workflow Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            **Commit:** ${{ github.sha }}
+            **Branch:** ${{ github.ref_name }}
+
+            Please check the [workflow logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details.`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+
+  build:
+    needs: [path-filter, lint, unit-tests, security, integration]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/staging' || github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=sha,prefix=staging-
+            type=raw,value=staging-latest
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}

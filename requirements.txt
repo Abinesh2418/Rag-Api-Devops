@@ -1,0 +1,5 @@
+fastapi
+ollama
+chromadb
+uvicorn
+requests
