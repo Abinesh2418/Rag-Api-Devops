@@ -1,5 +1,6 @@
 import os
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
 import chromadb
 
 # Mock LLM mode for CI testing
@@ -11,6 +12,10 @@ if not USE_MOCK_LLM:
 app = FastAPI()
 chroma = chromadb.PersistentClient(path="./db")
 collection = chroma.get_or_create_collection("docs")
+
+# Import and register dashboard routes from backend
+from backend.api import register_dashboard_routes
+register_dashboard_routes(app)
 
 
 @app.post("/query")

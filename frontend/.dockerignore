@@ -1,0 +1,9 @@
+# Nginx ignore patterns
+.env
+.git
+.gitignore
+*.md
+*.log
+node_modules/
+dist/
+build/
