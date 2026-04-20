@@ -5,674 +5,263 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RAG API - DevOps Dashboard</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Segoe UI', sans-serif;
+            background: #0f1117;
+            color: #e0e0e0;
             min-height: 100vh;
-            padding: 20px;
-        }
-        
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-        }
-        
-        .header {
-            background: rgba(255, 255, 255, 0.95);
-            padding: 30px;
-            border-radius: 12px;
-            margin-bottom: 30px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
-        }
-        
-        .header h1 {
-            color: #333;
-            font-size: 2.5em;
-            margin-bottom: 10px;
-        }
-        
-        .header p {
-            color: #666;
-            font-size: 1.1em;
-        }
-        
-        .grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 25px;
-            margin-bottom: 30px;
-        }
-        
-        @media (max-width: 1024px) {
-            .grid { grid-template-columns: 1fr; }
-        }
-        
-        .card {
-            background: rgba(255, 255, 255, 0.95);
-            border-radius: 12px;
-            padding: 25px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
-        }
-        
-        .card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 15px 50px rgba(0, 0, 0, 0.15);
-        }
-        
-        .card h2 {
-            color: #667eea;
-            font-size: 1.5em;
-            margin-bottom: 20px;
             display: flex;
+            flex-direction: column;
             align-items: center;
+            justify-content: center;
+            padding: 40px 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            font-size: 1.8em;
+            color: #fff;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+
+        .header p {
+            color: #888;
+            margin-top: 6px;
+            font-size: 0.9em;
+        }
+
+        .card {
+            background: #1a1d27;
+            border: 1px solid #2a2d3e;
+            border-radius: 10px;
+            padding: 28px;
+            width: 100%;
+            max-width: 640px;
+            margin-bottom: 20px;
+        }
+
+        .query-row {
+            display: flex;
             gap: 10px;
         }
-        
-        .docker-stats {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
-        }
-        
-        .stat-box {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 20px;
-            border-radius: 8px;
-            text-align: center;
-        }
-        
-        .stat-number {
-            font-size: 2.5em;
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
-        
-        .stat-label {
-            font-size: 0.9em;
-            opacity: 0.9;
-        }
-        
-        .status-badge {
-            display: inline-block;
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-weight: bold;
-            font-size: 0.9em;
-            margin: 5px 0;
-        }
-        
-        .status-success {
-            background: #d4edda;
-            color: #155724;
-        }
-        
-        .status-warning {
-            background: #fff3cd;
-            color: #856404;
-        }
-        
-        .status-error {
-            background: #f8d7da;
-            color: #721c24;
-        }
-        
-        .pipeline-stages {
-            display: flex;
-            gap: 8px;
-            margin-top: 15px;
-            flex-wrap: wrap;
-        }
-        
-        .stage {
-            background: #f0f0f0;
-            padding: 8px 12px;
+
+        input {
+            flex: 1;
+            background: #0f1117;
+            border: 1px solid #2a2d3e;
             border-radius: 6px;
-            font-size: 0.85em;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
-        
-        .stage.passed {
-            background: #d4edda;
-            color: #155724;
-        }
-        
-        .deployment-item {
-            background: #f8f9fa;
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 12px;
-            border-left: 4px solid #667eea;
-        }
-        
-        .deployment-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 8px;
-        }
-        
-        .deployment-id {
-            font-weight: bold;
-            color: #667eea;
-        }
-        
-        .deployment-time {
-            color: #999;
-            font-size: 0.9em;
-        }
-        
-        .deployment-trigger {
-            color: #666;
+            padding: 10px 14px;
+            color: #e0e0e0;
             font-size: 0.95em;
-            margin: 8px 0;
+            outline: none;
+            transition: border-color 0.2s;
         }
-        
-        .trigger-icon {
-            display: inline-block;
-            margin-right: 5px;
-        }
-        
-        .log-timeline {
-            position: relative;
-            padding: 20px 0;
-        }
-        
-        .log-entry {
-            padding: 15px;
-            margin-bottom: 15px;
-            background: #f8f9fa;
-            border-left: 4px solid #667eea;
+
+        input:focus { border-color: #5c6bc0; }
+
+        button {
+            background: #5c6bc0;
+            color: #fff;
+            border: none;
             border-radius: 6px;
-            animation: slideIn 0.5s ease-out;
-        }
-        
-        @keyframes slideIn {
-            from {
-                opacity: 0;
-                transform: translateX(-20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateX(0);
-            }
-        }
-        
-        .log-time {
-            color: #999;
-            font-size: 0.85em;
-            margin-bottom: 5px;
-        }
-        
-        .log-event {
-            font-weight: bold;
-            color: #667eea;
-            margin-bottom: 5px;
-        }
-        
-        .log-details {
-            color: #666;
+            padding: 10px 22px;
+            cursor: pointer;
             font-size: 0.95em;
+            font-weight: 500;
+            transition: background 0.2s;
         }
-        
-        .full-width {
-            grid-column: 1 / -1;
-        }
-        
-        .container-list {
-            list-style: none;
-            margin-top: 10px;
-        }
-        
-        .container-item {
-            padding: 8px;
-            background: #f0f0f0;
-            margin: 5px 0;
+
+        button:hover { background: #3f51b5; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .answer {
+            margin-top: 18px;
+            padding: 14px;
+            background: #0f1117;
+            border-left: 3px solid #5c6bc0;
             border-radius: 4px;
             font-size: 0.9em;
+            line-height: 1.6;
+            display: none;
         }
-        
-        .refresh-btn {
-            background: #667eea;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: bold;
-            float: right;
-            margin-top: -50px;
+
+        .answer.show { display: block; }
+
+        .answer .label {
+            color: #888;
+            font-size: 0.8em;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
-        
-        .refresh-btn:hover {
-            background: #764ba2;
+
+        .error {
+            margin-top: 12px;
+            color: #ef5350;
+            font-size: 0.85em;
+            display: none;
         }
-        
-        .feature-highlight {
-            background: #fffacd;
-            padding: 15px;
-            border-radius: 8px;
-            border-left: 4px solid #ffd700;
-            margin-top: 15px;
+
+        .error.show { display: block; }
+
+        .stats {
+            display: flex;
+            gap: 12px;
         }
-        
-        .feature-highlight strong {
-            color: #b8860b;
+
+        .stat {
+            flex: 1;
+            background: #1a1d27;
+            border: 1px solid #2a2d3e;
+            border-radius: 10px;
+            padding: 18px;
+            text-align: center;
         }
-        
-        .query-section {
+
+        .stat-value {
+            font-size: 1.6em;
+            font-weight: 600;
+            color: #5c6bc0;
+        }
+
+        .stat-label {
+            font-size: 0.78em;
+            color: #666;
+            margin-top: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .links {
             display: flex;
             gap: 10px;
-            margin-bottom: 20px;
+            margin-top: 8px;
         }
-        
-        .query-input {
+
+        .link {
             flex: 1;
-            padding: 12px 15px;
-            border: 2px solid #667eea;
-            border-radius: 8px;
-            font-size: 1em;
-            transition: border-color 0.3s;
-        }
-        
-        .query-input:focus {
-            outline: none;
-            border-color: #764ba2;
-            box-shadow: 0 0 10px rgba(102, 126, 234, 0.3);
-        }
-        
-        .query-btn {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            padding: 12px 30px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: bold;
-            font-size: 1em;
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-        
-        .query-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
-        }
-        
-        .query-btn:active {
-            transform: translateY(0);
-        }
-        
-        .query-btn.loading {
-            opacity: 0.7;
-            cursor: not-allowed;
-        }
-        
-        .query-result {
-            background: #f0f7ff;
-            padding: 20px;
-            border-radius: 8px;
-            border-left: 4px solid #667eea;
-            margin-top: 15px;
-            display: none;
-        }
-        
-        .query-result.show {
-            display: block;
-            animation: slideIn 0.5s ease-out;
-        }
-        
-        .query-result h4 {
-            color: #667eea;
-            margin-bottom: 10px;
-            font-size: 1em;
-        }
-        
-        .query-result p {
-            color: #333;
-            line-height: 1.6;
-            margin-bottom: 15px;
-        }
-        
-        .query-stats {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-            margin-top: 10px;
-            padding-top: 15px;
-            border-top: 1px solid #ddd;
-        }
-        
-        .query-stat {
-            background: white;
-            padding: 10px;
-            border-radius: 6px;
             text-align: center;
-            border: 1px solid #ddd;
+            padding: 9px;
+            border: 1px solid #2a2d3e;
+            border-radius: 6px;
+            color: #888;
+            font-size: 0.82em;
+            text-decoration: none;
+            transition: border-color 0.2s, color 0.2s;
         }
-        
-        .query-stat-value {
-            font-weight: bold;
-            color: #667eea;
-            font-size: 1.2em;
-        }
-        
-        .query-stat-label {
-            font-size: 0.85em;
-            color: #999;
-            margin-top: 5px;
-        }
-        
-        .error-message {
-            background: #f8d7da;
-            color: #721c24;
-            padding: 15px;
-            border-radius: 8px;
-            border-left: 4px solid #f5c6cb;
-            margin-top: 15px;
-            display: none;
-        }
-        
-        .error-message.show {
-            display: block;
-        }
-        
+
+        .link:hover { border-color: #5c6bc0; color: #5c6bc0; }
+
         .spinner {
             display: inline-block;
-            width: 16px;
-            height: 16px;
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid #667eea;
+            width: 14px; height: 14px;
+            border: 2px solid #444;
+            border-top-color: #5c6bc0;
             border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-right: 8px;
+            animation: spin 0.7s linear infinite;
             vertical-align: middle;
+            margin-right: 6px;
         }
-        
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
-    <div class="container">
-        <!-- Header -->
-        <div class="header">
-            <h1>🚀 RAG API - DevOps Dashboard</h1>
-            <p>Real-time monitoring of Docker, CI/CD Pipeline, and Auto-Deployments</p>
+    <div class="header">
+        <h1>RAG API DevOps Dashboard</h1>
+        <p>Ask questions from your docs · Powered by FastAPI + ChromaDB</p>
+    </div>
+
+    <!-- Query Card -->
+    <div class="card">
+        <div class="query-row">
+            <input id="q" type="text" placeholder="Ask anything… e.g. What is Kubernetes?" />
+            <button id="btn" onclick="ask()">Ask</button>
         </div>
-        
-        <!-- RAG Query Section -->
-        <div class="card full-width">
-            <h2>🤖 AI Query - Ask Anything About Your System</h2>
-            <div class="query-section">
-                <input 
-                    type="text" 
-                    class="query-input" 
-                    id="query-input" 
-                    placeholder="Ask a question... (e.g., 'What is Kubernetes?', 'What is Docker?')"
-                    onkeypress="if(event.key==='Enter') submitQuery()"
-                >
-                <button class="query-btn" id="query-btn" onclick="submitQuery()">Ask</button>
-            </div>
-            
-            <!-- Query Result -->
-            <div class="query-result" id="query-result">
-                <h4>📝 Answer:</h4>
-                <p id="answer-text"></p>
-                <div class="query-stats">
-                    <div class="query-stat">
-                        <div class="query-stat-value" id="query-time">-</div>
-                        <div class="query-stat-label">Response Time</div>
-                    </div>
-                    <div class="query-stat">
-                        <div class="query-stat-value" id="total-queries">-</div>
-                        <div class="query-stat-label">Total Queries</div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Error Message -->
-            <div class="error-message" id="error-message"></div>
-            
-            <div class="feature-highlight">
-                <strong>✅ AI-Powered Retrieval:</strong> Ask questions and get instant answers from your documentation using RAG (Retrieval-Augmented Generation)
-            </div>
+        <div class="answer" id="answer">
+            <div class="label">Answer</div>
+            <div id="answer-text"></div>
         </div>
-        
-        <!-- Main Grid -->
-        <div class="grid">
-            <!-- Docker Status Card -->
-            <div class="card">
-                <h2>🐳 Docker Status</h2>
-                <div class="docker-stats" id="docker-stats">
-                    <div class="stat-box">
-                        <div class="stat-number">-</div>
-                        <div class="stat-label">Containers Running</div>
-                    </div>
-                    <div class="stat-box">
-                        <div class="stat-number">-</div>
-                        <div class="stat-label">Images Available</div>
-                    </div>
-                </div>
-                <h3 style="margin-top: 20px; color: #333; font-size: 1.1em;">Running Containers:</h3>
-                <ul class="container-list" id="container-list"></ul>
-                <div class="feature-highlight">
-                    <strong>✅ Live Containerization:</strong> Applications packaged with all dependencies
-                </div>
-            </div>
-            
-            <!-- CI/CD Pipeline Card -->
-            <div class="card">
-                <h2>🔄 CI/CD Pipeline Status</h2>
-                <div style="margin-bottom: 15px;">
-                    <strong>Last Run:</strong> <span id="last-run">-</span><br>
-                    <strong>Status:</strong> <span id="pipeline-status" class="status-badge">Loading...</span><br>
-                    <strong>Branch:</strong> <span id="branch">-</span>
-                </div>
-                <h3 style="color: #333; font-size: 1.1em;">Pipeline Stages:</h3>
-                <div class="pipeline-stages" id="pipeline-stages"></div>
-                <div class="feature-highlight">
-                    <strong>✅ Automated Quality Gates:</strong> Lint, Security Scan, Tests - All pass before deployment
-                </div>
-            </div>
-            
-            <!-- Deployment History Card -->
-            <div class="card">
-                <h2>📦 Recent Deployments</h2>
-                <div id="deployments"></div>
-                <div class="feature-highlight">
-                    <strong>✅ Zero-Downtime Deployments:</strong> Blue-green strategy with instant rollback support
-                </div>
-            </div>
-            
-            <!-- Auto-Trigger Logs Card -->
-            <div class="card">
-                <h2>⚡ Auto-Trigger Timeline (Git Push → Live)</h2>
-                <p style="color: #666; margin-bottom: 15px; font-size: 0.95em;">
-                    <strong>What happens when you push code:</strong>
-                </p>
-                <div class="log-timeline" id="auto-triggers"></div>
-                <div class="feature-highlight">
-                    <strong>✅ Fully Automated:</strong> No manual intervention needed! Push → Tests → Build → Deploy → Live
-                </div>
-            </div>
+        <div class="error" id="error"></div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats" style="width:100%;max-width:640px;margin-bottom:20px;">
+        <div class="stat">
+            <div class="stat-value" id="total">—</div>
+            <div class="stat-label">Total Queries</div>
+        </div>
+        <div class="stat">
+            <div class="stat-value" id="latency">—</div>
+            <div class="stat-label">Last Response</div>
+        </div>
+        <div class="stat">
+            <div class="stat-value" id="status">—</div>
+            <div class="stat-label">API Status</div>
         </div>
     </div>
-    
+
+    <!-- Quick Links -->
+    <div class="links" style="width:100%;max-width:640px;">
+        <a class="link" href="http://localhost:8000/docs" target="_blank">📄 API Docs</a>
+        <a class="link" href="http://localhost:9090" target="_blank">📊 Prometheus</a>
+        <a class="link" href="http://localhost:3001/d/rag-api-monitoring" target="_blank">📈 Grafana</a>
+    </div>
+
     <script>
-        // Submit Query Function
-        async function submitQuery() {
-            const queryInput = document.getElementById('query-input');
-            const query = queryInput.value.trim();
-            
-            if (!query) {
-                showError('Please enter a question');
-                return;
-            }
-            
-            const queryBtn = document.getElementById('query-btn');
-            const errorDiv = document.getElementById('error-message');
-            
-            // Clear error
+        let queryCount = 0;
+
+        async function ask() {
+            const q = document.getElementById('q').value.trim();
+            if (!q) return;
+
+            const btn = document.getElementById('btn');
+            const answerDiv = document.getElementById('answer');
+            const errorDiv = document.getElementById('error');
+
             errorDiv.classList.remove('show');
-            errorDiv.innerHTML = '';
-            
-            // Show loading state
-            queryBtn.classList.add('loading');
-            queryBtn.disabled = true;
-            queryBtn.innerHTML = '<span class="spinner"></span>Loading...';
-            
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span>Asking…';
+
+            const t0 = Date.now();
             try {
-                const startTime = Date.now();
-                
-                const response = await fetch(`/query?q=${encodeURIComponent(query)}`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    }
-                });
-                
-                if (!response.ok) {
-                    throw new Error(`API Error: ${response.status}`);
-                }
-                
-                const data = await response.json();
-                const endTime = Date.now();
-                const responseTime = (endTime - startTime) / 1000;
-                
-                // Display result
-                displayResult(data.answer, responseTime);
-                
-                // Clear input
-                queryInput.value = '';
-                
-            } catch (error) {
-                showError(`Error: ${error.message}. Make sure the services are running (docker-compose up).`);
-                console.error('Query error:', error);
+                const res = await fetch(`/query?q=${encodeURIComponent(q)}`, { method: 'POST' });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                const ms = Date.now() - t0;
+
+                document.getElementById('answer-text').textContent = data.answer;
+                answerDiv.classList.add('show');
+                document.getElementById('q').value = '';
+
+                queryCount++;
+                document.getElementById('total').textContent = queryCount;
+                document.getElementById('latency').textContent = (ms / 1000).toFixed(2) + 's';
+                document.getElementById('status').textContent = '✓ Up';
+            } catch (e) {
+                errorDiv.textContent = 'Could not reach backend. Is docker-compose running?';
+                errorDiv.classList.add('show');
             } finally {
-                // Reset button
-                queryBtn.classList.remove('loading');
-                queryBtn.disabled = false;
-                queryBtn.innerHTML = 'Ask';
+                btn.disabled = false;
+                btn.innerHTML = 'Ask';
             }
         }
-        
-        function displayResult(answer, responseTime) {
-            const resultDiv = document.getElementById('query-result');
-            const answerText = document.getElementById('answer-text');
-            const queryTimeSpan = document.getElementById('query-time');
-            const totalQueriesSpan = document.getElementById('total-queries');
-            
-            // Display answer
-            answerText.textContent = answer;
-            queryTimeSpan.textContent = responseTime.toFixed(2) + 's';
-            
-            // Get metrics (this is simulated - would need real metrics endpoint)
-            totalQueriesSpan.textContent = '1+';
-            
-            // Show result
-            resultDiv.classList.add('show');
-            
-            // Scroll to result
-            resultDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
-        
-        function showError(message) {
-            const errorDiv = document.getElementById('error-message');
-            errorDiv.innerHTML = `<strong>⚠️ Error:</strong> ${message}`;
-            errorDiv.classList.add('show');
-        }
-        
-        async function loadDashboard() {
-            try {
-                // Load Docker Status
-                const docker = await fetch('/api/docker-status').then(r => r.json());
-                document.getElementById('docker-stats').innerHTML = `
-                    <div class="stat-box">
-                        <div class="stat-number">${docker.containers_running}</div>
-                        <div class="stat-label">Containers Running</div>
-                    </div>
-                    <div class="stat-box">
-                        <div class="stat-number">${docker.images_available}</div>
-                        <div class="stat-label">Images Available</div>
-                    </div>
-                `;
-                
-                // Load container list
-                const containerHtml = docker.containers.map(c => 
-                    `<li class="container-item">▶️ ${c.name} - ${c.status}</li>`
-                ).join('');
-                document.getElementById('container-list').innerHTML = containerHtml || '<li class="container-item">No containers found</li>';
-                
-                // Load Pipeline Status
-                const pipeline = await fetch('/api/pipeline-status').then(r => r.json());
-                document.getElementById('last-run').textContent = pipeline.last_run;
-                document.getElementById('pipeline-status').textContent = pipeline.status;
-                document.getElementById('pipeline-status').className = 'status-badge status-success';
-                document.getElementById('branch').textContent = pipeline.branch;
-                
-                const stagesHtml = pipeline.stages.map(s => 
-                    `<div class="stage passed">${s.name} ${s.status} (${s.duration})</div>`
-                ).join('');
-                document.getElementById('pipeline-stages').innerHTML = stagesHtml;
-                
-                // Load Deployments
-                const deployments = await fetch('/api/deployments').then(r => r.json());
-                const deploymentsHtml = deployments.map(d => `
-                    <div class="deployment-item">
-                        <div class="deployment-header">
-                            <span class="deployment-id">${d.id}</span>
-                            <span class="deployment-time">${new Date(d.timestamp).toLocaleString()}</span>
-                        </div>
-                        <div class="status-badge status-success">${d.status}</div>
-                        <div class="deployment-trigger">
-                            <span class="trigger-icon">🔔</span> ${d.trigger}
-                        </div>
-                        <div style="color: #999; font-size: 0.9em; margin-top: 8px;">
-                            📝 ${d.changes}
-                        </div>
-                    </div>
-                `).join('');
-                document.getElementById('deployments').innerHTML = deploymentsHtml;
-                
-                // Load Auto-Trigger Logs
-                const triggers = await fetch('/api/auto-triggers').then(r => r.json());
-                const triggersHtml = triggers.map(t => `
-                    <div class="log-entry">
-                        <div class="log-time">⏰ ${new Date(t.time).toLocaleTimeString()}</div>
-                        <div class="log-event">${t.event}</div>
-                        <div class="log-details">${t.details}</div>
-                    </div>
-                `).join('');
-                document.getElementById('auto-triggers').innerHTML = triggersHtml;
-                
-            } catch (error) {
-                console.error('Error loading dashboard:', error);
-            }
-        }
-        
-        // Load on page load
-        loadDashboard();
-        
-        // Refresh every 5 seconds
-        setInterval(loadDashboard, 5000);
-        
-        // Allow Enter key to submit query
-        document.getElementById('query-input').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                submitQuery();
-            }
+
+        document.getElementById('q').addEventListener('keydown', e => {
+            if (e.key === 'Enter') ask();
         });
+
+        // Ping backend on load
+        fetch('/query?q=ping', { method: 'POST' })
+            .then(() => document.getElementById('status').textContent = '✓ Up')
+            .catch(() => document.getElementById('status').textContent = '✗ Down');
     </script>
 </body>
 </html>
