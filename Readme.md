@@ -1,342 +1,278 @@
-# RAG API – Automated Testing & DevOps Pipeline
+# Smart Automated Deployment System for Web Applications Using DevOps
 
-This project is a small **Retrieval-Augmented Generation (RAG) API** built with **FastAPI** and **ChromaDB**, wrapped in a **GitHub Actions CI/CD pipeline** that demonstrates:
+> **Team 08** | Domain: DevOps  
+> Abinesh B · Abisheck A M · Dharun S · Jeevan Kumar S  
+> Guide: Mrs Nivetha R (Assistant Professor I)
 
-- Automated unit and semantic tests
-- Quality gates (lint + coverage)
-- Security checks (dependency auditing)
-- Staging deployment via Docker images
-- Failure notifications (PR comments + email)
-
-The goal is to model a **real DevOps loop** for an AI/RAG service.
+A fully automated CI/CD pipeline that detects code changes, builds the application inside containers, runs automated tests, and deploys — all without manual intervention.
 
 ---
 
-## Application Overview
+## Architecture Overview
 
-- **API**: `app.py` exposes a single endpoint:
-  - `POST /query?q=...` – returns an answer built from the embedded docs.
-- **Vector store**: `embed_docs.py`:
-  - Reads `.txt` files from `docs/`
-  - Stores them in a `chromadb` collection.
-- **LLM behavior**:
-  - In **mock mode** (`USE_MOCK_LLM=1`), the API returns the retrieved context directly.
-  - In **production mode**, it calls **Ollama** (model `tinyllama`) to answer using the retrieved context.
+```
+Developer Push
+      │
+      ▼
+GitHub Repository ──► GitHub Actions CI/CD
+                              │
+                ┌─────────────┼─────────────┐
+                │             │             │
+              Lint       Unit Tests     Security
+                │             │             │
+                └─────────────┼─────────────┘
+                              │
+                    Integration Tests
+                    (if docs/ or app.py changed)
+                              │
+                    Docker Build & Push to GHCR
+                    (only on push to main/staging)
+                              │
+              ┌───────────────┴───────────────┐
+        Backend Container            Frontend Container
+        FastAPI  :8000               Nginx    :3000
+              │
+      ┌───────┴────────┐
+  Prometheus         Grafana
+    :9090              :3001
+```
 
-The CI pipeline mainly tests the **RAG behavior** in mock mode so we can run reliably in GitHub Actions without external LLM dependencies.
+**Technology Stack:**
 
----
-
-## CI/CD Pipeline Overview
-
-The workflow lives in `[.github/workflows/ci.yml](.github/workflows/ci.yml)` and runs on:
-
-- **Every `push`**
-- **Every `pull_request`**
-
-Jobs (in logical order):
-
-1. `path-filter`
-2. `lint`
-3. `unit-tests`
-4. `security`
-5. `integration` (semantic tests)
-6. `build` (staging Docker image)
-7. `notify` (failure notifications)
-
-All jobs are **additive** – none of the original app behavior is changed by CI.
-
----
-
-## Jobs and When They Run
-
-### 1. `path-filter` (change detection)
-
-**Purpose**: Decide if heavy RAG/semantic tests should run.
-
-- Runs on **every push and PR**.
-- Uses `dorny/paths-filter` to set a flag `rag_changed` to `true` if any of these change:
-  - `docs/**`
-  - `app.py`
-  - `embed_docs.py`
-
-**Output**:
-
-- `needs.path-filter.outputs.rag_changed == 'true'` → RAG-related files changed.
-- `== 'false'` → only non-RAG files changed (e.g., docs/CI-only changes).
-
-This output is consumed by the `integration` job.
+| Layer | Tool | Purpose |
+|-------|------|---------|
+| Version Control | Git & GitHub | Branching, webhooks, source management |
+| CI/CD | GitHub Actions | Automated build → test → deploy pipeline |
+| Containerization | Docker + Docker Compose | Identical environments everywhere |
+| Backend API | FastAPI + ChromaDB | RAG query engine with vector search |
+| Frontend | Nginx | Dashboard UI + reverse proxy to backend |
+| Monitoring | Prometheus + Grafana | Real-time metrics and auto-provisioned dashboards |
 
 ---
 
-### 2. `lint` (style & static checks)
+## Project Structure
 
-**Tool**: [Ruff](https://github.com/astral-sh/ruff)  
-**Config**: `[pyproject.toml](pyproject.toml)` (`[tool.ruff]` + `[tool.ruff.format]`)
-
-- Runs on **every push and PR**.
-- Steps:
-  - `ruff check .`
-  - `ruff format --check .`
-
-**Quality gate**:
-
-- If Ruff finds errors or formatting drift → **job fails** → **workflow fails**.
-
-**Where to see output**:
-
-- Actions → run → `lint` job:
-  - `Run Ruff check` / `Run Ruff format check` steps show exact violations.
+```
+.
+├── app.py                          # FastAPI entry point — /query, /metrics, dashboard routes
+├── embed_docs.py                   # Reads docs/*.txt → embeds into ChromaDB
+├── requirements.txt                # Python dependencies
+├── pyproject.toml                  # Ruff + pytest + coverage configuration
+├── docker-compose.yml              # Orchestrates all 4 containers
+│
+├── backend/                        # Backend module
+│   ├── __init__.py
+│   ├── api.py                      # Dashboard API routes (docker-status, pipeline-status, etc.)
+│   └── Dockerfile                  # python:3.11-slim image
+│
+├── frontend/                       # Frontend module
+│   ├── index.html                  # Interactive DevOps dashboard UI
+│   ├── nginx.conf                  # Reverse proxy: /query, /api/, /metrics → backend
+│   └── Dockerfile                  # nginx:alpine image
+│
+├── docs/                           # RAG knowledge base (changes here trigger CI)
+│   ├── k8s.txt                     # Kubernetes documentation
+│   ├── Devops.txt                  # DevOps concepts
+│   ├── nextwork.txt                # NextWork content
+│   └── CI_AND_TESTING.md           # CI/CD documentation
+│
+├── monitoring/                     # Observability stack
+│   ├── prometheus.yml              # Scrapes backend:8000/metrics every 15s
+│   └── grafana/
+│       └── provisioning/
+│           ├── datasources/        # Auto-provisions Prometheus datasource (uid: prometheus)
+│           └── dashboards/         # Pre-built RAG API dashboard (JSON)
+│
+├── tests/                          # All tests in one place
+│   ├── __init__.py
+│   ├── conftest.py                 # Fixtures: mock LLM + mock ChromaDB collection
+│   ├── test_app.py                 # Unit tests — FastAPI TestClient for /query
+│   └── semantic_test.py            # Integration tests — live RAG quality assertions
+│
+└── .github/
+    └── workflows/
+        └── ci.yml                  # Full CI/CD pipeline definition
+```
 
 ---
 
-### 3. `unit-tests` (fast API tests + coverage)
+## Services & Access URLs
 
-**Test files**:
+| Service | URL | Purpose |
+|---------|-----|---------|
+| Dashboard UI | http://localhost:3000 | Frontend — ask questions, view Docker/CI/CD status |
+| Backend API | http://localhost:8000/docs | Swagger UI for all endpoints |
+| Prometheus | http://localhost:9090 | Metrics explorer & PromQL |
+| Grafana | http://localhost:3001 | Dashboards — login: admin / admin |
 
-- `tests/test_app.py` – FastAPI `TestClient` tests for `/query`
-- `tests/conftest.py` – Fixtures:
-  - Sets `USE_MOCK_LLM=1` so Ollama is not required.
-  - Mocks `chromadb` collection for deterministic behavior.
+---
 
-**What it does**:
-
-- Installs production + test deps from `requirements.txt` plus `pytest`, `pytest-cov`, `httpx`.
-- Runs:
+## Quick Start
 
 ```bash
-pytest tests/ -v --cov=app --cov-report=term-missing --cov-report=xml
-coverage report --fail-under=80
+# Start all 4 services
+docker-compose up --build
+
+# Make a query
+curl -X POST "http://localhost:8000/query?q=What%20is%20Kubernetes"
+
+# View raw Prometheus metrics
+curl http://localhost:8000/metrics | grep rag_
 ```
 
-**Quality gate**:
-
-- If **any test fails** → job fails.
-- If **coverage < 80% for `app.py`** → `coverage report --fail-under=80` fails.
-
-**Where to see output**:
-
-- Actions → run → `unit-tests` job:
-  - Pytest output (test names, pass/fail).
-  - Coverage table for `app.py` with missing lines if any.
-
 ---
 
-### 4. `security` (dependency vulnerability scanning)
+## CI/CD Pipeline
 
-**Tool**: [`pypa/gh-action-pip-audit`](https://github.com/pypa/gh-action-pip-audit)  
-**Input**: `requirements.txt`
+The workflow at [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on **every push and pull request**.
 
-- Runs on **every push and PR**.
-- Installs deps from `requirements.txt`.
-- Runs `pip-audit` against the dependency list.
+### Job Flow
 
-**Quality gate**:
-
-- If any dependency has a known CVE → `security` **fails** → workflow fails.
-
-**Where to see output**:
-
-- Actions → run → `security` job → `Run pip-audit for vulnerability scanning`:
-  - Lists packages, versions, vulnerability IDs (e.g., CVE-XXXX-YYYY), and severities.
-
----
-
-### 5. `integration` (semantic RAG tests)
-
-This is where the **end-to-end RAG behavior** is tested.
-
-**What it does**:
-
-1. Installs deps from `requirements.txt`.
-2. Runs `python embed_docs.py`:
-   - Rebuilds embeddings from all `.txt` files in `docs/`.
-3. Starts the API in **mock mode**:
-   - `USE_MOCK_LLM=1 uvicorn app:app --host 0.0.0.0 --port 8000 &`
-   - Waits a few seconds for the server.
-4. Runs `python semantic_test.py`:
-   - Sends HTTP POST requests to `/query` and asserts that answers contain key concepts
-     (e.g., `"container"` for Kubernetes, `"maximus"` for NextWork).
-
-**When it runs**:
-
-```yaml
-if: github.event_name == 'pull_request' || needs.path-filter.outputs.rag_changed == 'true'
+```
+push / PR
+   │
+   ├── path-filter     Detect if docs/, app.py, embed_docs.py changed → sets rag_changed
+   ├── lint            ruff check + ruff format --check  (quality gate)
+   ├── unit-tests      pytest tests/test_app.py + coverage ≥ 80%  (quality gate)
+   ├── security        pip-audit CVE scan on requirements.txt  (quality gate)
+   │
+   ├── integration     Rebuild embeddings → start API → run tests/semantic_test.py
+   │   └── runs when: PR (always) | push with rag_changed == true
+   │
+   ├── build           Docker build + push to GitHub Container Registry (ghcr.io)
+   │   └── runs when: push to main or staging + all jobs above passed
+   │
+   └── notify          Posts PR comment listing failed jobs
+       └── runs when: any job fails
 ```
 
-- **Always on PRs** (regardless of which files changed).
-- On **pushes only when** any of:
-  - `docs/**`
-  - `app.py`
-  - `embed_docs.py`
-  changed (so `rag_changed == 'true'`).
+### When Each Job Runs
 
-**Outputs / meaning**:
+| Trigger | lint | unit-tests | security | integration | build |
+|---------|------|------------|----------|-------------|-------|
+| PR (any files) | ✅ | ✅ | ✅ | ✅ | ❌ |
+| Push — non-RAG files changed | ✅ | ✅ | ✅ | ❌ skipped | ❌ |
+| Push — `docs/` or `app.py` changed | ✅ | ✅ | ✅ | ✅ | ❌ |
+| Push to **main** — `docs/` changed | ✅ | ✅ | ✅ | ✅ | ✅ |
 
-- ✅ `integration` green:
-  - RAG embeddings + API + semantic tests all passed.
-  - Changes did not degrade answer quality for the tested queries.
-- ⛔ `integration` red:
-  - Something broke in:
-    - embeddings (`embed_docs.py`)
-    - API behavior (`app.py`)
-    - or semantic expectations (`semantic_test.py`).
+**Demo trigger:** Edit any file in `docs/` and push to `main` → all 6 jobs run including Docker build.
+
+### Quality Gates
+
+| Gate | Tool | Threshold |
+|------|------|-----------|
+| Code style | `ruff check` + `ruff format --check` | Zero violations |
+| Test coverage | `pytest --cov=app` + `coverage report` | ≥ 80% |
+| Vulnerabilities | `pip-audit` on requirements.txt | Zero known CVEs |
 
 ---
 
-### 6. `build` (staging Docker image)
+## RAG Application
 
-**Purpose**: Build a **staging Docker image** and push it to **GitHub Container Registry**.
+**How it works:**
+1. `embed_docs.py` reads every `.txt` from `docs/` → stores vectors in ChromaDB  
+2. `POST /query?q=<question>` retrieves the closest doc chunk by vector similarity  
+3. **Mock mode** (`USE_MOCK_LLM=1`) — returns the retrieved chunk directly (used in Docker + CI)  
+4. **Production mode** — passes context + question to Ollama (`tinyllama`) for a generated answer
 
-**Dockerfile**: `[Dockerfile](Dockerfile)`:
+### API Endpoints
 
-- Installs dependencies from `requirements.txt`.
-- Copies `app.py`, `embed_docs.py`, and `docs/`.
-- Runs `python embed_docs.py` at build time.
-- Exposes port 8000 and runs:
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/query?q=<text>` | RAG query → returns AI answer |
+| `GET` | `/metrics` | Prometheus metrics endpoint |
+| `GET` | `/docs` | Swagger UI |
+| `GET` | `/api/docker-status` | Live running container stats |
+| `GET` | `/api/pipeline-status` | CI/CD pipeline info |
+| `GET` | `/api/deployments` | Recent deployment history |
+| `GET` | `/api/auto-triggers` | Auto-trigger event timeline |
+
+---
+
+## Monitoring & Observability
+
+### Prometheus Metrics
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `rag_queries_total` | Counter | Total RAG queries processed |
+| `rag_query_duration_seconds` | Histogram | Per-query latency (p50/p95/p99) |
+
+### Grafana Dashboard
+
+Pre-built dashboard auto-loads at http://localhost:3001 (admin/admin):
+
+- **API Requests Per Second** — `rate(rag_queries_total[1m])`
+- **p95 Query Latency** — `histogram_quantile(0.95, rate(rag_query_duration_seconds_bucket[5m]))`
+- **Total Queries** — running counter stat
+- **Average Query Duration** — mean response time stat
+
+### Useful PromQL Queries
+
+```promql
+rag_queries_total
+rate(rag_queries_total[1m])
+histogram_quantile(0.95, rate(rag_query_duration_seconds_bucket[5m])) * 1000
+rate(rag_query_duration_seconds_sum[1m]) / rate(rag_query_duration_seconds_count[1m])
+```
+
+---
+
+## Demo Checklist
+
+### 1 — Docker Validation
+```bash
+docker-compose up --build
+docker ps                   # 4 containers: devops-backend, devops-frontend, devops-prometheus, devops-grafana
+curl http://localhost:8000/docs     # Swagger UI loads
+curl http://localhost:3000          # Dashboard loads
+```
+
+### 2 — CI/CD Pipeline Demo
+```bash
+# Edit any file in docs/ and push to main
+echo "Updated: $(date)" >> docs/k8s.txt
+git add docs/k8s.txt
+git commit -m "demo: trigger full CI pipeline"
+git push origin main
+# GitHub Actions: lint → unit-tests → security → integration → build (all green)
+```
+
+### 3 — Monitoring Demo
+```bash
+# Send a few queries (generates Prometheus metrics)
+curl -X POST "http://localhost:8000/query?q=What%20is%20Docker"
+curl -X POST "http://localhost:8000/query?q=What%20is%20Kubernetes"
+
+# Open Grafana → http://localhost:3001 → RAG API Monitoring
+# Metrics appear within 15 seconds (Prometheus scrape interval)
+```
+
+---
+
+## Running Locally (Without Docker)
 
 ```bash
-uvicorn app:app --host 0.0.0.0 --port 8000
-```
-
-**When it runs**:
-
-```yaml
-build:
-  needs: [path-filter, lint, unit-tests, security, integration]
-  if: github.event_name == 'push' && (github.ref == 'refs/heads/staging' || github.ref == 'refs/heads/main')
-```
-
-- Event **must** be a `push` to **`staging`** or **`main`**.
-- All CI jobs (`path-filter`, `lint`, `unit-tests`, `security`, `integration`) must have **succeeded**.
-
-**What it does**:
-
-- Logs in to `ghcr.io` using `GITHUB_TOKEN`.
-- Uses `docker/metadata-action` to generate tags:
-  - `staging-<commit-sha>`
-  - `staging-latest`
-- Uses `docker/build-push-action` to:
-  - Build the image from the repository
-  - Push to:
-    - `ghcr.io/<owner>/<repo>:staging-<sha>`
-    - `ghcr.io/<owner>/<repo>:staging-latest`
-
-**Where to see output**:
-
-- Actions → run → `build` job:
-  - Shows build logs and `Pushed` lines with image tags.
-- GitHub → repo → **Packages**:
-  - Shows the container image and available tags.
-
-**How to run the staging image locally**:
-
-```bash
-docker pull ghcr.io/<owner>/<repo>:staging-latest
-docker run -p 8000:8000 ghcr.io/<owner>/<repo>:staging-latest
-```
-
----
-
-### 7. `notify` (failure notifications)
-
-**Purpose**: When the workflow fails, post a **short summary comment on the PR**.
-
-**When it runs**:
-
-```yaml
-notify:
-  needs: [path-filter, lint, unit-tests, security, integration]
-  if: failure()
-```
-
-- Runs only when the **overall workflow fails**.
-- Gathers which `needs.*.result` values are `"failure"`.
-- If the event is a PR, uses `actions/github-script` to create a comment.
-
-**Example PR comment**:
-
-```markdown
-## CI Pipeline Failed
-
-The following job(s) failed:
-- lint
-- unit-tests
-
-**Workflow Run:** https://github.com/<owner>/<repo>/actions/runs/<id>
-**Commit:** <sha>
-**Branch:** <branch>
-
-Please check the workflow logs for details.
-```
-
-In addition, you enabled **GitHub’s built-in email notifications**:
-
-- GitHub → Settings → Notifications → Actions → “Email (Failed workflows only)”
-- You receive an email whenever a workflow run fails.
-
----
-
-## Summary: Which Features Trigger When?
-
-| Event / Condition                                    | path-filter | lint | unit-tests | security | integration | build | notify |
-|------------------------------------------------------|------------|------|------------|----------|------------|-------|--------|
-| **PR (any files)**                                  | ✅          | ✅    | ✅          | ✅        | ✅          | ❌     | ⛔ only if failure |
-| **Push to feature/test branch (no RAG changes)**    | ✅          | ✅    | ✅          | ✅        | ❌ (skipped) | ❌     | ⛔ only if failure |
-| **Push to feature/test branch (RAG files changed)** | ✅          | ✅    | ✅          | ✅        | ✅          | ❌     | ⛔ only if failure |
-| **Push to `staging`/`main` (no RAG changes)**       | ✅          | ✅    | ✅          | ✅        | ❌ (skipped) | ❌     | ⛔ only if failure |
-| **Push to `staging`/`main` (RAG files changed)**    | ✅          | ✅    | ✅          | ✅        | ✅          | ✅     | ⛔ only if failure |
-
-Legend:
-
-- ✅ – job runs
-- ❌ – job never runs for this case (by design)
-- ⛔ – job runs **only if** there is a failure upstream (`if: failure()`)
-
----
-
-## Running Things Locally
-
-### 1. Setup
-
-```bash
+# Setup
 python -m venv .venv
-source .venv/bin/activate  # PowerShell: .\.venv\Scripts\Activate.ps1
+source .venv/bin/activate           # Windows: .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 pip install pytest pytest-cov httpx ruff pip-audit
-```
 
-### 2. Rebuild embeddings
-
-```bash
+# Build vector store
 python embed_docs.py
-```
 
-### 3. Start the API (mock mode)
-
-```bash
-export USE_MOCK_LLM=1  # PowerShell: $env:USE_MOCK_LLM="1"
+# Start backend in mock mode
+export USE_MOCK_LLM=1               # Windows: $env:USE_MOCK_LLM="1"
 uvicorn app:app --host 127.0.0.1 --port 8000
-```
 
-### 4. Run semantic tests
+# Run unit tests
+pytest tests/test_app.py -v --cov=app --cov-report=term-missing
 
-In another terminal (with the venv active):
+# Run semantic/integration tests (server must be running)
+python tests/semantic_test.py
 
-```bash
-python semantic_test.py
-```
-
-### 5. Run unit tests with coverage
-
-```bash
-pytest tests/ -v --cov=app --cov-report=term-missing
-coverage report --fail-under=80
-```
-
-### 6. Run lint and security checks
-
-```bash
+# Lint and security
 ruff check .
 ruff format --check .
 pip-audit --requirement requirements.txt
@@ -344,18 +280,25 @@ pip-audit --requirement requirements.txt
 
 ---
 
-## What This Project Demonstrates
+## Changes Made in This Session
 
-End-to-end, this repository shows how to:
+| Area | What Changed |
+|------|-------------|
+| **Lint fix** | Removed unused `FileResponse` import; moved `backend.api` import to top of `app.py` |
+| **Code style** | Reformatted `app.py` and `backend/api.py` with ruff (trailing commas, line length) |
+| **Frontend fix** | Changed query URL from hardcoded `http://localhost:8000/query` → relative `/query` so Nginx proxy is used |
+| **Grafana fix** | Updated datasource references from deprecated string `"Prometheus"` to object `{"type":"prometheus","uid":"prometheus"}` for Grafana 10+ |
+| **Grafana fix** | Added explicit `uid: prometheus` to `datasource.yml` |
+| **Modularization** | Moved `semantic_test.py` → `tests/semantic_test.py`; deleted orphan `embed.py` |
+| **CI update** | Updated `ci.yml` to run `python tests/semantic_test.py` from new location |
+| **README** | Full rewrite with architecture diagram, demo checklist, PromQL queries, CI/CD table |
 
-- Build a small **RAG API** with FastAPI + ChromaDB.
-- Add **semantic tests** that assert answer quality using real queries.
-- Use **GitHub Actions** to:
-  - Run linting and unit tests on every push and PR.
-  - Enforce **coverage thresholds** and style checks as **quality gates**.
-  - Run **integration tests** only when relevant files change.
-  - Run **security checks** on dependencies.
-  - Build and push a **staging Docker image** on successful `staging`/`main` pushes.
-  - Send **notifications** (PR comments + email) when runs fail.
+---
 
-This is a template for treating an AI/RAG service like a real production system with solid DevOps practices.
+## Future Scope
+
+1. **AI-Powered Deployment Decisions** — ML models to predict deployment risks
+2. **Multi-Cloud Deployment** — AWS, Azure, GCP via Terraform modules
+3. **GitOps with ArgoCD** — Git as single source of truth for infrastructure state
+4. **Serverless & Edge** — AWS Lambda, Cloud Functions support
+5. **DevSecOps** — SAST/DAST + compliance checks integrated into the pipeline

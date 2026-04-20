@@ -268,6 +268,139 @@
         .feature-highlight strong {
             color: #b8860b;
         }
+        
+        .query-section {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .query-input {
+            flex: 1;
+            padding: 12px 15px;
+            border: 2px solid #667eea;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: border-color 0.3s;
+        }
+        
+        .query-input:focus {
+            outline: none;
+            border-color: #764ba2;
+            box-shadow: 0 0 10px rgba(102, 126, 234, 0.3);
+        }
+        
+        .query-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 1em;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .query-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        .query-btn:active {
+            transform: translateY(0);
+        }
+        
+        .query-btn.loading {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+        
+        .query-result {
+            background: #f0f7ff;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+            margin-top: 15px;
+            display: none;
+        }
+        
+        .query-result.show {
+            display: block;
+            animation: slideIn 0.5s ease-out;
+        }
+        
+        .query-result h4 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 1em;
+        }
+        
+        .query-result p {
+            color: #333;
+            line-height: 1.6;
+            margin-bottom: 15px;
+        }
+        
+        .query-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 10px;
+            padding-top: 15px;
+            border-top: 1px solid #ddd;
+        }
+        
+        .query-stat {
+            background: white;
+            padding: 10px;
+            border-radius: 6px;
+            text-align: center;
+            border: 1px solid #ddd;
+        }
+        
+        .query-stat-value {
+            font-weight: bold;
+            color: #667eea;
+            font-size: 1.2em;
+        }
+        
+        .query-stat-label {
+            font-size: 0.85em;
+            color: #999;
+            margin-top: 5px;
+        }
+        
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #f5c6cb;
+            margin-top: 15px;
+            display: none;
+        }
+        
+        .error-message.show {
+            display: block;
+        }
+        
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body>
@@ -276,6 +409,44 @@
         <div class="header">
             <h1>🚀 RAG API - DevOps Dashboard</h1>
             <p>Real-time monitoring of Docker, CI/CD Pipeline, and Auto-Deployments</p>
+        </div>
+        
+        <!-- RAG Query Section -->
+        <div class="card full-width">
+            <h2>🤖 AI Query - Ask Anything About Your System</h2>
+            <div class="query-section">
+                <input 
+                    type="text" 
+                    class="query-input" 
+                    id="query-input" 
+                    placeholder="Ask a question... (e.g., 'What is Kubernetes?', 'What is Docker?')"
+                    onkeypress="if(event.key==='Enter') submitQuery()"
+                >
+                <button class="query-btn" id="query-btn" onclick="submitQuery()">Ask</button>
+            </div>
+            
+            <!-- Query Result -->
+            <div class="query-result" id="query-result">
+                <h4>📝 Answer:</h4>
+                <p id="answer-text"></p>
+                <div class="query-stats">
+                    <div class="query-stat">
+                        <div class="query-stat-value" id="query-time">-</div>
+                        <div class="query-stat-label">Response Time</div>
+                    </div>
+                    <div class="query-stat">
+                        <div class="query-stat-value" id="total-queries">-</div>
+                        <div class="query-stat-label">Total Queries</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Error Message -->
+            <div class="error-message" id="error-message"></div>
+            
+            <div class="feature-highlight">
+                <strong>✅ AI-Powered Retrieval:</strong> Ask questions and get instant answers from your documentation using RAG (Retrieval-Augmented Generation)
+            </div>
         </div>
         
         <!-- Main Grid -->
@@ -339,6 +510,89 @@
     </div>
     
     <script>
+        // Submit Query Function
+        async function submitQuery() {
+            const queryInput = document.getElementById('query-input');
+            const query = queryInput.value.trim();
+            
+            if (!query) {
+                showError('Please enter a question');
+                return;
+            }
+            
+            const queryBtn = document.getElementById('query-btn');
+            const errorDiv = document.getElementById('error-message');
+            
+            // Clear error
+            errorDiv.classList.remove('show');
+            errorDiv.innerHTML = '';
+            
+            // Show loading state
+            queryBtn.classList.add('loading');
+            queryBtn.disabled = true;
+            queryBtn.innerHTML = '<span class="spinner"></span>Loading...';
+            
+            try {
+                const startTime = Date.now();
+                
+                const response = await fetch(`/query?q=${encodeURIComponent(query)}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`API Error: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                const endTime = Date.now();
+                const responseTime = (endTime - startTime) / 1000;
+                
+                // Display result
+                displayResult(data.answer, responseTime);
+                
+                // Clear input
+                queryInput.value = '';
+                
+            } catch (error) {
+                showError(`Error: ${error.message}. Make sure the services are running (docker-compose up).`);
+                console.error('Query error:', error);
+            } finally {
+                // Reset button
+                queryBtn.classList.remove('loading');
+                queryBtn.disabled = false;
+                queryBtn.innerHTML = 'Ask';
+            }
+        }
+        
+        function displayResult(answer, responseTime) {
+            const resultDiv = document.getElementById('query-result');
+            const answerText = document.getElementById('answer-text');
+            const queryTimeSpan = document.getElementById('query-time');
+            const totalQueriesSpan = document.getElementById('total-queries');
+            
+            // Display answer
+            answerText.textContent = answer;
+            queryTimeSpan.textContent = responseTime.toFixed(2) + 's';
+            
+            // Get metrics (this is simulated - would need real metrics endpoint)
+            totalQueriesSpan.textContent = '1+';
+            
+            // Show result
+            resultDiv.classList.add('show');
+            
+            // Scroll to result
+            resultDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        
+        function showError(message) {
+            const errorDiv = document.getElementById('error-message');
+            errorDiv.innerHTML = `<strong>⚠️ Error:</strong> ${message}`;
+            errorDiv.classList.add('show');
+        }
+        
         async function loadDashboard() {
             try {
                 // Load Docker Status
@@ -412,6 +666,13 @@
         
         // Refresh every 5 seconds
         setInterval(loadDashboard, 5000);
+        
+        // Allow Enter key to submit query
+        document.getElementById('query-input').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                submitQuery();
+            }
+        });
     </script>
 </body>
 </html>

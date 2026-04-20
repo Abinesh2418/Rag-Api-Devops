@@ -114,7 +114,7 @@ jobs:
           sleep 5
 
       - name: Run semantic tests
-        run: python semantic_test.py
+        run: python tests/semantic_test.py
 
       - name: Success
         run: echo "All tests passed! RAG quality maintained."
