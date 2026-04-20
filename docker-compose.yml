@@ -71,7 +71,7 @@ services:
 
   # Grafana - Visualization & Dashboards
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:10.4.3
     container_name: devops-grafana
     ports:
       - "3001:3000"
@@ -81,7 +81,6 @@ services:
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_SECURITY_ADMIN_USER=admin
-      - GF_INSTALL_PLUGINS=grafana-piechart-panel
     networks:
       - devops-network
     depends_on:
