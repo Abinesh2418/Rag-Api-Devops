@@ -119,8 +119,49 @@ jobs:
       - name: Success
         run: echo "All tests passed! RAG quality maintained."
 
+  build:
+    needs: [lint, unit-tests, security, integration]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/staging' || github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Backend Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./backend/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/backend:latest
+            ghcr.io/${{ github.repository }}/backend:${{ github.sha }}
+
+      - name: Build and push Frontend Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./frontend/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/frontend:latest
+            ghcr.io/${{ github.repository }}/frontend:${{ github.sha }}
+
   notify:
-    needs: [path-filter, lint, unit-tests, security, integration]
+    needs: [path-filter, lint, unit-tests, security, integration, build]
     if: failure()
     runs-on: ubuntu-latest
     permissions:
@@ -148,6 +189,9 @@ jobs:
           fi
           if [ "${{ needs.integration.result }}" == "failure" ]; then
             FAILED_JOBS="${FAILED_JOBS}- integration\n"
+          fi
+          if [ "${{ needs.build.result }}" == "failure" ]; then
+            FAILED_JOBS="${FAILED_JOBS}- build\n"
           fi
           echo "failed_jobs<<EOF" >> $GITHUB_OUTPUT
           echo -e "$FAILED_JOBS" >> $GITHUB_OUTPUT
@@ -178,40 +222,3 @@ jobs:
               body: body
             });
 
-  build:
-    needs: [path-filter, lint, unit-tests, security, integration]
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/staging' || github.ref == 'refs/heads/main')
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/${{ github.repository }}
-          tags: |
-            type=sha,prefix=staging-
-            type=raw,value=staging-latest
-
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
