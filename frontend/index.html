@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RAG API - DevOps Dashboard</title>
+    <title>Automate DevOps Workflows with AI</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -154,10 +154,32 @@
             color: #888;
             font-size: 0.82em;
             text-decoration: none;
+            cursor: pointer;
             transition: border-color 0.2s, color 0.2s;
         }
 
         .link:hover { border-color: #5c6bc0; color: #5c6bc0; }
+        .link.active { border-color: #5c6bc0; color: #5c6bc0; background: #1a1d27; }
+
+        .embed-panel {
+            width: 100%;
+            max-width: 960px;
+            margin-top: 16px;
+            border: 1px solid #2a2d3e;
+            border-radius: 10px;
+            overflow: hidden;
+            display: none;
+        }
+
+        .embed-panel.show { display: block; }
+
+        .embed-panel iframe {
+            width: 100%;
+            height: 600px;
+            border: none;
+            display: block;
+            background: #0f1117;
+        }
 
         .spinner {
             display: inline-block;
@@ -175,14 +197,14 @@
 </head>
 <body>
     <div class="header">
-        <h1>RAG API DevOps Dashboard</h1>
-        <p>Ask questions from your docs · Powered by FastAPI + ChromaDB</p>
+        <h1>Automate DevOps Workflows with AI</h1>
+        <p>AI-powered DevOps assistant · Azure GPT-4o · Self-healing CI/CD pipeline</p>
     </div>
 
     <!-- Query Card -->
     <div class="card">
         <div class="query-row">
-            <input id="q" type="text" placeholder="Ask anything… e.g. What is Kubernetes?" />
+            <input id="q" type="text" placeholder="" />
             <button id="btn" onclick="ask()">Ask</button>
         </div>
         <div class="answer" id="answer">
@@ -210,9 +232,13 @@
 
     <!-- Quick Links -->
     <div class="links" style="width:100%;max-width:640px;">
-        <a class="link" href="http://localhost:8000/docs" target="_blank">📄 API Docs</a>
-        <a class="link" href="http://localhost:9090" target="_blank">📊 Prometheus</a>
-        <a class="link" href="http://localhost:3001/d/rag-api-monitoring" target="_blank">📈 Grafana</a>
+        <a class="link" id="link-prometheus" onclick="showEmbed('prometheus')">📊 Prometheus</a>
+        <a class="link" id="link-grafana" onclick="showEmbed('grafana')">📈 Grafana</a>
+    </div>
+
+    <!-- Embedded Panel -->
+    <div class="embed-panel" id="embed-panel">
+        <iframe id="embed-frame" src="" title="Embedded view"></iframe>
     </div>
 
     <script>
@@ -252,6 +278,37 @@
                 btn.disabled = false;
                 btn.innerHTML = 'Ask';
             }
+        }
+
+        const embedUrls = {
+            prometheus: 'http://localhost:9090',
+            grafana: 'http://localhost:3001'
+        };
+
+        let activeEmbed = null;
+
+        function showEmbed(tool) {
+            const panel = document.getElementById('embed-panel');
+            const frame = document.getElementById('embed-frame');
+
+            if (activeEmbed === tool) {
+                // Toggle off if clicking the same button again
+                panel.classList.remove('show');
+                document.getElementById('link-' + tool).classList.remove('active');
+                activeEmbed = null;
+                return;
+            }
+
+            frame.src = embedUrls[tool];
+            panel.classList.add('show');
+
+            ['prometheus', 'grafana'].forEach(t => {
+                document.getElementById('link-' + t).classList.remove('active');
+            });
+            document.getElementById('link-' + tool).classList.add('active');
+            activeEmbed = tool;
+
+            panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
 
         document.getElementById('q').addEventListener('keydown', e => {

@@ -1,0 +1,42 @@
+groups:
+  - name: rag_api_alerts
+    interval: 15s
+    rules:
+
+      - alert: APIDown
+        expr: up{job="fastapi-backend"} == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "RAG API backend is down"
+          description: "The FastAPI backend has been unreachable for more than 30 seconds."
+
+      - alert: HighQueryLatency
+        expr: |
+          rate(rag_query_duration_seconds_sum[5m]) /
+          rate(rag_query_duration_seconds_count[5m]) > 5
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High query latency detected"
+          description: "Average query latency is above 5 seconds over the last 5 minutes."
+
+      - alert: HighQueryRate
+        expr: rate(rag_queries_total[5m]) > 5
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Unusually high query rate"
+          description: "Query rate has exceeded 5 requests/second for 2 minutes."
+
+      - alert: NoQueriesReceived
+        expr: rate(rag_queries_total[10m]) == 0
+        for: 5m
+        labels:
+          severity: info
+        annotations:
+          summary: "No queries received in 10 minutes"
+          description: "The RAG API has received no traffic in the last 10 minutes."

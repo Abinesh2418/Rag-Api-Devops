@@ -4,18 +4,17 @@ services:
   # Backend Service - FastAPI
   backend:
     build:
-      context: .
+      context: ..
       dockerfile: backend/Dockerfile
     container_name: devops-backend
     ports:
       - "8000:8000"
-    environment:
-      - USE_MOCK_LLM=1
-      - LOG_LEVEL=INFO
+    env_file:
+      - ../backend/.env
     volumes:
-      - ./db:/app/db
-      - ./backend:/app/backend
-      - ./docs:/app/docs
+      - ../db:/app/db
+      - ../backend:/app/backend
+      - ../docs:/app/docs
     networks:
       - devops-network
     healthcheck:
@@ -24,19 +23,38 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
-    depends_on: []
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  # Redis - Query Cache
+  redis:
+    image: redis:7-alpine
+    container_name: devops-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - devops-network
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
   # Frontend Service - Nginx
   frontend:
     build:
-      context: .
+      context: ..
       dockerfile: frontend/Dockerfile
     container_name: devops-frontend
     ports:
       - "3000:3000"
     volumes:
-      - ./frontend/index.html:/usr/share/nginx/html/index.html
-      - ./frontend/nginx.conf:/etc/nginx/nginx.conf
+      - ../frontend/index.html:/usr/share/nginx/html/index.html
+      - ../frontend/nginx.conf:/etc/nginx/nginx.conf
     networks:
       - devops-network
     depends_on:
@@ -56,7 +74,8 @@ services:
     ports:
       - "9090:9090"
     volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ../monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ../monitoring/alert_rules.yml:/etc/prometheus/alert_rules.yml
       - prometheus-data:/prometheus
     networks:
       - devops-network
@@ -77,10 +96,13 @@ services:
       - "3001:3000"
     volumes:
       - grafana-storage:/var/lib/grafana
-      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+      - ../monitoring/grafana/provisioning:/etc/grafana/provisioning
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
     networks:
       - devops-network
     depends_on:
@@ -102,4 +124,5 @@ volumes:
     driver: local
   grafana-storage:
     driver: local
-
+  redis-data:
+    driver: local

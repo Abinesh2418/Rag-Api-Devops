@@ -9,11 +9,10 @@ RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 COPY requirements.txt .
 
 # Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --timeout=120 --retries=5 -r requirements.txt
 
 # Copy application files
-COPY app.py .
-COPY embed_docs.py .
+COPY scripts/embed_docs.py .
 COPY backend ./backend
 COPY docs ./docs
 
@@ -26,4 +25,4 @@ RUN python embed_docs.py || true
 EXPOSE 8000
 
 # Run FastAPI with Uvicorn
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "backend.app:app", "--host", "0.0.0.0", "--port", "8000"]

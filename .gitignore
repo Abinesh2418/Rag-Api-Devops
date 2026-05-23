@@ -6,9 +6,19 @@ __pycache__/
 *.egg-info/
 .Python
 
+# Test artifacts
+coverage.xml
+.coverage
+htmlcov/
+
 
 # Chroma database
 db/
+
+# Environment variables
+.env
+backend/.env
+*.env
 
 # IDE
 .vscode/

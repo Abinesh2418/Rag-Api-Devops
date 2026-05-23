@@ -1,5 +1,5 @@
 fastapi
-ollama
+openai
 chromadb
 uvicorn
 requests

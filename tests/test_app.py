@@ -2,8 +2,7 @@
 
 from fastapi.testclient import TestClient
 
-# Import after conftest has set USE_MOCK_LLM
-import app as app_module  # noqa: E402
+import backend.app as app_module  # noqa: E402
 
 
 def test_query_returns_200_and_answer(client: TestClient):
@@ -15,15 +14,12 @@ def test_query_returns_200_and_answer(client: TestClient):
     assert "container" in data["answer"].lower()
 
 
-def test_query_with_empty_documents_returns_empty_context():
-    """When collection returns no documents, answer is empty string."""
-    from unittest.mock import MagicMock
+def test_query_returns_error_on_api_failure():
+    """When Azure OpenAI raises an exception, /query returns an error message."""
+    from unittest.mock import patch
 
-    mock = MagicMock()
-    mock.query.return_value = {"documents": [], "metadatas": [], "ids": []}
-    app_module.collection = mock
-
-    with TestClient(app_module.app) as c:
-        response = c.post("http://testserver/query?q=anything")
+    with patch.object(app_module.azure_client.chat.completions, "create", side_effect=Exception("API error")):
+        with TestClient(app_module.app) as c:
+            response = c.post("http://testserver/query?q=anything")
     assert response.status_code == 200
-    assert response.json()["answer"] == ""
+    assert "Error" in response.json()["answer"]

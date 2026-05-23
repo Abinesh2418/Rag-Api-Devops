@@ -1,32 +1,25 @@
 """Pytest fixtures for RAG API unit tests."""
 
 import os
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-# Enable mock LLM before app imports so ollama is not required
-os.environ["USE_MOCK_LLM"] = "1"
+os.environ.setdefault("AZURE_OPENAI_API_KEY", "test-key")
+os.environ.setdefault("AZURE_OPENAI_ENDPOINT", "https://test.openai.azure.com/")
+os.environ.setdefault("AZURE_OPENAI_API_VERSION", "2024-12-01-preview")
+os.environ.setdefault("AZURE_OPENAI_MODEL", "gpt-4o")
 
-import app as app_module  # noqa: E402
-
-
-@pytest.fixture
-def mock_collection():
-    """Mock ChromaDB collection that returns fixed context."""
-    mock = MagicMock()
-    mock.query.return_value = {
-        "documents": [["Kubernetes is a container orchestration platform."]],
-        "metadatas": [[]],
-        "ids": [["doc1"]],
-    }
-    return mock
+import backend.app as app_module  # noqa: E402
 
 
 @pytest.fixture
-def client(mock_collection):
-    """FastAPI test client with mocked ChromaDB collection."""
-    app_module.collection = mock_collection
-    from fastapi.testclient import TestClient
+def client():
+    """FastAPI test client with mocked Azure OpenAI client."""
+    mock_response = MagicMock()
+    mock_response.choices[0].message.content = "Kubernetes is a container orchestration platform."
 
-    return TestClient(app_module.app)
+    with patch.object(app_module.azure_client.chat.completions, "create", return_value=mock_response):
+        from fastapi.testclient import TestClient
+
+        yield TestClient(app_module.app)

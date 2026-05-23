@@ -4,6 +4,10 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: write
+  pull-requests: write
+
 jobs:
   path-filter:
     runs-on: ubuntu-latest
@@ -23,8 +27,8 @@ jobs:
           filters: |
             rag_changed:
               - 'docs/**'
-              - 'app.py'
-              - 'embed_docs.py'
+              - 'backend/app.py'
+              - 'scripts/embed_docs.py'
 
   lint:
     runs-on: ubuntu-latest
@@ -63,9 +67,12 @@ jobs:
           pip install pytest pytest-cov httpx
 
       - name: Run unit tests with coverage
-        run: pytest tests/ -v --cov=app --cov-report=term-missing --cov-report=xml
+        run: pytest tests/ -v --cov=backend/app --cov-report=term-missing --cov-report=xml
         env:
-          USE_MOCK_LLM: "1"
+          AZURE_OPENAI_API_KEY: "test-key"
+          AZURE_OPENAI_ENDPOINT: "https://test.openai.azure.com/"
+          AZURE_OPENAI_API_VERSION: "2024-12-01-preview"
+          AZURE_OPENAI_MODEL: "gpt-4o"
 
       - name: Check coverage threshold
         run: coverage report --fail-under=80
@@ -106,12 +113,17 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Rebuild embeddings
-        run: python embed_docs.py
+        run: python scripts/embed_docs.py
 
-      - name: Start API in mock mode
+      - name: Start API
         run: |
-          USE_MOCK_LLM=1 uvicorn app:app --host 0.0.0.0 --port 8000 &
+          uvicorn backend.app:app --host 0.0.0.0 --port 8000 &
           sleep 5
+        env:
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+          AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+          AZURE_OPENAI_API_VERSION: "2024-12-01-preview"
+          AZURE_OPENAI_MODEL: "gpt-4o"
 
       - name: Run semantic tests
         run: python tests/semantic_test.py
@@ -163,6 +175,95 @@ jobs:
           tags: |
             ghcr.io/${{ steps.repo.outputs.name }}/frontend:latest
             ghcr.io/${{ steps.repo.outputs.name }}/frontend:${{ github.sha }}
+
+  ai-repair:
+    needs: [unit-tests]
+    if: always() && needs.unit-tests.result == 'failure'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest pytest-cov httpx
+
+      - name: Capture test failures
+        run: pytest tests/ -v --tb=short 2>&1 | tee test_failures.txt || true
+        env:
+          AZURE_OPENAI_API_KEY: "test-key"
+          AZURE_OPENAI_ENDPOINT: "https://test.openai.azure.com/"
+          AZURE_OPENAI_API_VERSION: "2024-12-01-preview"
+          AZURE_OPENAI_MODEL: "gpt-4o"
+
+      - name: Run AI repair agent
+        run: python scripts/ai_repair.py
+        env:
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+          AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+          AZURE_OPENAI_API_VERSION: "2024-12-01-preview"
+          AZURE_OPENAI_MODEL: "gpt-4o"
+
+      - name: Check if AI produced a fix
+        id: check-changes
+        run: |
+          if git diff --quiet app.py; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Push fix to new branch
+        if: steps.check-changes.outputs.changed == 'true'
+        run: |
+          git config user.name "AI DevOps Bot"
+          git config user.email "ai-bot@noreply.github.com"
+          BRANCH="ai-fix/run-${{ github.run_id }}"
+          git checkout -b $BRANCH
+          git add backend/app.py
+          git commit -m "ai-fix: auto-repair unit-test failure from run #${{ github.run_id }}"
+          git push origin $BRANCH
+
+      - name: Open pull request with AI fix
+        if: steps.check-changes.outputs.changed == 'true'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const failureLog = fs.readFileSync('test_failures.txt', 'utf8').slice(-2000);
+            const branch = `ai-fix/run-${{ github.run_id }}`;
+            const base = '${{ github.ref_name }}';
+            await github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `[AI Fix] Unit test failure on ${base} — run #${{ github.run_id }}`,
+              head: branch,
+              base: base,
+              body: [
+                '## AI-Generated Repair',
+                '',
+                'This PR was automatically created by the **AI repair agent** after unit tests failed on `' + base + '`.',
+                '',
+                '### What failed',
+                '```',
+                failureLog,
+                '```',
+                '',
+                '### What the AI changed',
+                'See the diff above. The AI was scoped to fix only `app.py` for the failing test(s) without restructuring unrelated code.',
+                '',
+                '---',
+                '> **Human review required before merging.**',
+                '> Merging this PR will trigger a fresh CI run on the corrected code — the second pass of the two-pass self-healing loop.'
+              ].join('\n')
+            });
 
   notify:
     needs: [path-filter, lint, unit-tests, security, integration, build]
