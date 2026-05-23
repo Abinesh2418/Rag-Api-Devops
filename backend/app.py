@@ -112,9 +112,7 @@ def query(q: str):
                 ],
                 timeout=30,
             )
-            answer = response.choices[0].message.content
-            print(f"[AI] Response received — {len(answer)} chars")
-            return {"answer": answer}
+            return {"answer": response.choices[0].message.content}
         except Exception as e:
             print(f"[ERROR] Azure OpenAI failed: {e}")
             return {"answer": f"Error: {str(e)}"}
