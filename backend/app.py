@@ -88,7 +88,7 @@ def query(q: str):
         context = get_context(q)
 
         try:
-            response = broken_client.chat.completions.create(
+            response = azure_client.chat.completions.create(
                 model=os.getenv("AZURE_OPENAI_MODEL", "gpt-4o"),
                 messages=[
                     {
@@ -102,6 +102,6 @@ def query(q: str):
                 ],
                 timeout=30,
             )
-            return {"answer": response.choices[0].message.content}
+            return {"result": response.choices[0].message.content}
         except Exception as e:
             return {"answer": f"Error: {str(e)}"}
