@@ -20,6 +20,8 @@ omit = [
     "*/docs/*",
     "*/__pycache__/*",
     "*/site-packages/*",
+    "backend/api.py",
+    "scripts/*",
 ]
 
 [tool.coverage.report]
