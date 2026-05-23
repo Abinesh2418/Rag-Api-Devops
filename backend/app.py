@@ -8,11 +8,13 @@ from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_
 
 from backend.api import register_dashboard_routes
 
+print("[STARTUP] Initializing Azure OpenAI client...")
 azure_client = AzureOpenAI(
     api_key=os.getenv("AZURE_OPENAI_API_KEY"),
     azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
     api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-12-01-preview"),
 )
+print(f"[STARTUP] Azure OpenAI client ready — endpoint: {os.getenv('AZURE_OPENAI_ENDPOINT')}")
 
 # In-memory knowledge base — no ChromaDB/ONNX download needed
 DOCS = {
@@ -42,19 +44,24 @@ DOCS = {
         "Jenkins is self-hosted, giving teams full control over their automation infrastructure."
     ),
 }
+print(f"[STARTUP] Knowledge base loaded — {len(DOCS)} topics: {list(DOCS.keys())}")
 
 
 def get_context(q: str) -> str:
     q_lower = q.lower()
     if "kubernetes" in q_lower or "k8s" in q_lower:
+        print("[CONTEXT] Matched topic: kubernetes")
         return DOCS["kubernetes"]
     if "docker" in q_lower:
+        print("[CONTEXT] Matched topic: docker")
         return DOCS["docker"]
     if "ci" in q_lower or "cd" in q_lower or "cicd" in q_lower or "pipeline" in q_lower:
+        print("[CONTEXT] Matched topic: cicd")
         return DOCS["cicd"]
     if "jenkins" in q_lower:
+        print("[CONTEXT] Matched topic: jenkins")
         return DOCS["jenkins"]
-    # fallback — combine all docs
+    print("[CONTEXT] No topic matched — using full knowledge base (fallback)")
     return " ".join(DOCS.values())
 
 
@@ -74,6 +81,7 @@ rag_query_duration_seconds = Histogram(
 )
 
 register_dashboard_routes(app)
+print("[STARTUP] FastAPI app ready — all routes registered")
 
 
 @app.get("/metrics")
@@ -83,10 +91,12 @@ def metrics():
 
 @app.post("/query")
 def query(q: str):
+    print(f"[QUERY] Received: '{q}'")
     with rag_query_duration_seconds.time():
         rag_queries_total.inc()
         context = get_context(q)
 
+        print(f"[AI] Calling Azure OpenAI — model: {os.getenv('AZURE_OPENAI_MODEL', 'gpt-4o')}")
         try:
             response = azure_client.chat.completions.create(
                 model=os.getenv("AZURE_OPENAI_MODEL", "gpt-4o"),
@@ -102,6 +112,9 @@ def query(q: str):
                 ],
                 timeout=30,
             )
-            return {"response": response.choices[0].message.content}
+            answer = response.choices[0].message.content
+            print(f"[AI] Response received — {len(answer)} chars")
+            return {"answer": answer}
         except Exception as e:
+            print(f"[ERROR] Azure OpenAI failed: {e}")
             return {"answer": f"Error: {str(e)}"}

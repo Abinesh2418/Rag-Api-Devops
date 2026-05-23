@@ -67,7 +67,7 @@ jobs:
           pip install pytest pytest-cov httpx
 
       - name: Run unit tests with coverage
-        run: pytest tests/ -v --cov=backend/app --cov-report=term-missing --cov-report=xml
+        run: pytest tests/ -v --cov=backend --cov-report=term-missing --cov-report=xml
         env:
           AZURE_OPENAI_API_KEY: "test-key"
           AZURE_OPENAI_ENDPOINT: "https://test.openai.azure.com/"
