@@ -102,6 +102,6 @@ def query(q: str):
                 ],
                 timeout=30,
             )
-            return {"result": response.choices[0].message.content}
+            return {"result ": response.choices[0].message.content}
         except Exception as e:
             return {"answer": f"Error: {str(e)}"}
