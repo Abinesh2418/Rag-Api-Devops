@@ -1,6 +1,6 @@
 import os
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from openai import AzureOpenAI
@@ -104,4 +104,4 @@ def query(q: str):
             )
             return {"answer": response.choices[0].message.content}
         except Exception as e:
-            return {"answer": f"Error: {str(e)}"}
+            raise HTTPException(status_code=200, detail={"answer": f"Error: {str(e)}"})
