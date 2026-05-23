@@ -17,9 +17,13 @@ import backend.app as app_module  # noqa: E402
 def client():
     """FastAPI test client with mocked Azure OpenAI client."""
     mock_response = MagicMock()
-    mock_response.choices[0].message.content = "Kubernetes is a container orchestration platform."
+    mock_response.choices[
+        0
+    ].message.content = "Kubernetes is a container orchestration platform."
 
-    with patch.object(app_module.azure_client.chat.completions, "create", return_value=mock_response):
+    with patch.object(
+        app_module.azure_client.chat.completions, "create", return_value=mock_response
+    ):
         from fastapi.testclient import TestClient
 
         yield TestClient(app_module.app)

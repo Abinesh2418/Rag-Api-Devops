@@ -29,7 +29,11 @@ def main():
     # Trim to the most relevant tail — the actual failure output
     failure_log = raw[-3000:] if len(raw) > 3000 else raw
 
-    if "passed" in failure_log and "failed" not in failure_log and "error" not in failure_log.lower():
+    if (
+        "passed" in failure_log
+        and "failed" not in failure_log
+        and "error" not in failure_log.lower()
+    ):
         print("Tests appear to be passing — no repair needed.")
         sys.exit(0)
 

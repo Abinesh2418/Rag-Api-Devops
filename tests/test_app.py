@@ -18,7 +18,11 @@ def test_query_returns_error_on_api_failure():
     """When Azure OpenAI raises an exception, /query returns an error message."""
     from unittest.mock import patch
 
-    with patch.object(app_module.azure_client.chat.completions, "create", side_effect=Exception("API error")):
+    with patch.object(
+        app_module.azure_client.chat.completions,
+        "create",
+        side_effect=Exception("API error"),
+    ):
         with TestClient(app_module.app) as c:
             response = c.post("http://testserver/query?q=anything")
     assert response.status_code == 200

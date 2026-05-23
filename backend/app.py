@@ -14,7 +14,9 @@ azure_client = AzureOpenAI(
     azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
     api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-12-01-preview"),
 )
-print(f"[STARTUP] Azure OpenAI client ready — endpoint: {os.getenv('AZURE_OPENAI_ENDPOINT')}")
+print(
+    f"[STARTUP] Azure OpenAI client ready — endpoint: {os.getenv('AZURE_OPENAI_ENDPOINT')}"
+)
 
 # In-memory knowledge base — no ChromaDB/ONNX download needed
 DOCS = {
@@ -96,7 +98,9 @@ def query(q: str):
         rag_queries_total.inc()
         context = get_context(q)
 
-        print(f"[AI] Calling Azure OpenAI — model: {os.getenv('AZURE_OPENAI_MODEL', 'gpt-4o')}")
+        print(
+            f"[AI] Calling Azure OpenAI — model: {os.getenv('AZURE_OPENAI_MODEL', 'gpt-4o')}"
+        )
         try:
             response = azure_client.chat.completions.create(
                 model=os.getenv("AZURE_OPENAI_MODEL", "gpt-4o"),
@@ -112,7 +116,7 @@ def query(q: str):
                 ],
                 timeout=30,
             )
-            return {"response": response.choices[0].message.content}
+            return {"answer": response.choices[0].message.content}
         except Exception as e:
             print(f"[ERROR] Azure OpenAI failed: {e}")
             return {"answer": f"Error: {str(e)}"}
