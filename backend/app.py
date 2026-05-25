@@ -1,3 +1,4 @@
+import json
 import os
 
 from fastapi import FastAPI
@@ -6,7 +7,12 @@ from fastapi.responses import Response
 from openai import AzureOpenAI
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 
-from backend.api import register_dashboard_routes
+from backend.api import (
+    get_deployment_history,
+    get_docker_status,
+    get_pipeline_status,
+    register_dashboard_routes,
+)
 
 print("[STARTUP] Initializing Azure OpenAI client...")
 azure_client = AzureOpenAI(
@@ -47,6 +53,39 @@ DOCS = {
     ),
 }
 print(f"[STARTUP] Knowledge base loaded — {len(DOCS)} topics: {list(DOCS.keys())}")
+
+TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "get_docker_status",
+            "description": "Get current Docker container health and running container count",
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_pipeline_status",
+            "description": "Get the latest CI/CD pipeline run status and stages",
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_deployment_history",
+            "description": "Get recent deployment history with timestamps and status",
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+]
+
+TOOL_FN_MAP = {
+    "get_docker_status": get_docker_status,
+    "get_pipeline_status": get_pipeline_status,
+    "get_deployment_history": get_deployment_history,
+}
 
 
 def get_context(q: str) -> str:
@@ -98,25 +137,58 @@ def query(q: str):
         rag_queries_total.inc()
         context = get_context(q)
 
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You are a DevOps assistant. Answer questions clearly and concisely. "
+                    "Use tools for live system data (container health, pipeline status, deployments) "
+                    "and the provided context for conceptual questions."
+                ),
+            },
+            {
+                "role": "user",
+                "content": f"Context:\n{context}\n\nQuestion: {q}\n\nAnswer clearly and concisely:",
+            },
+        ]
+
         print(
             f"[AI] Calling Azure OpenAI — model: {os.getenv('AZURE_OPENAI_MODEL', 'gpt-4o')}"
         )
         try:
             response = azure_client.chat.completions.create(
                 model=os.getenv("AZURE_OPENAI_MODEL", "gpt-4o"),
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are a DevOps assistant. Answer questions clearly and concisely based on the provided context.",
-                    },
-                    {
-                        "role": "user",
-                        "content": f"Context:\n{context}\n\nQuestion: {q}\n\nAnswer clearly and concisely:",
-                    },
-                ],
+                messages=messages,
+                tools=TOOLS,
+                tool_choice="auto",
                 timeout=30,
             )
-            return {"answer": response.choices[0].message.content}
+
+            msg = response.choices[0].message
+
+            if msg.tool_calls:
+                print(f"[TOOL] {len(msg.tool_calls)} tool call(s) requested")
+                messages.append(msg)
+                for tc in msg.tool_calls:
+                    fn_name = tc.function.name
+                    print(f"[TOOL] Executing: {fn_name}")
+                    result = TOOL_FN_MAP[fn_name]()
+                    messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tc.id,
+                            "content": json.dumps(result),
+                        }
+                    )
+
+                print("[AI] Second pass with tool results...")
+                response = azure_client.chat.completions.create(
+                    model=os.getenv("AZURE_OPENAI_MODEL", "gpt-4o"),
+                    messages=messages,
+                    timeout=30,
+                )
+
+            return {"response": response.choices[0].message.content}
         except Exception as e:
             print(f"[ERROR] Azure OpenAI failed: {e}")
             return {"answer": f"Error: {str(e)}"}

@@ -20,6 +20,7 @@ def client():
     mock_response.choices[
         0
     ].message.content = "Kubernetes is a container orchestration platform."
+    mock_response.choices[0].message.tool_calls = None
 
     with patch.object(
         app_module.azure_client.chat.completions, "create", return_value=mock_response

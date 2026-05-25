@@ -217,16 +217,16 @@
     <!-- Stats -->
     <div class="stats" style="width:100%;max-width:640px;margin-bottom:20px;">
         <div class="stat">
-            <div class="stat-value" id="total">—</div>
-            <div class="stat-label">Total Queries</div>
+            <div class="stat-value" id="containers">—</div>
+            <div class="stat-label">Containers</div>
         </div>
         <div class="stat">
-            <div class="stat-value" id="latency">—</div>
-            <div class="stat-label">Last Response</div>
+            <div class="stat-value" id="pipeline">—</div>
+            <div class="stat-label">Pipeline</div>
         </div>
         <div class="stat">
-            <div class="stat-value" id="status">—</div>
-            <div class="stat-label">API Status</div>
+            <div class="stat-value" id="deploy">—</div>
+            <div class="stat-label">Last Deploy</div>
         </div>
     </div>
 
@@ -242,7 +242,35 @@
     </div>
 
     <script>
-        let queryCount = 0;
+        async function loadStats() {
+            try {
+                const [dockerRes, pipelineRes, deployRes] = await Promise.all([
+                    fetch('/api/docker-status'),
+                    fetch('/api/pipeline-status'),
+                    fetch('/api/deployments'),
+                ]);
+
+                if (dockerRes.ok) {
+                    const d = await dockerRes.json();
+                    document.getElementById('containers').textContent = d.containers_running + ' ✓';
+                }
+
+                if (pipelineRes.ok) {
+                    const p = await pipelineRes.json();
+                    const s = p.status || '—';
+                    document.getElementById('pipeline').textContent = s.includes('SUCCESS') ? '✓ Pass' : s;
+                }
+
+                if (deployRes.ok) {
+                    const deps = await deployRes.json();
+                    if (deps.length > 0) {
+                        document.getElementById('deploy').textContent = deps[0].id;
+                    }
+                }
+            } catch (e) {
+                console.warn('Stats fetch failed:', e);
+            }
+        }
 
         async function ask() {
             const q = document.getElementById('q').value.trim();
@@ -256,21 +284,14 @@
             btn.disabled = true;
             btn.innerHTML = '<span class="spinner"></span>Asking…';
 
-            const t0 = Date.now();
             try {
                 const res = await fetch(`/query?q=${encodeURIComponent(q)}`, { method: 'POST' });
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 const data = await res.json();
-                const ms = Date.now() - t0;
 
                 document.getElementById('answer-text').textContent = data.answer;
                 answerDiv.classList.add('show');
                 document.getElementById('q').value = '';
-
-                queryCount++;
-                document.getElementById('total').textContent = queryCount;
-                document.getElementById('latency').textContent = (ms / 1000).toFixed(2) + 's';
-                document.getElementById('status').textContent = '✓ Up';
             } catch (e) {
                 errorDiv.textContent = 'Could not reach backend. Is docker-compose running?';
                 errorDiv.classList.add('show');
@@ -315,10 +336,8 @@
             if (e.key === 'Enter') ask();
         });
 
-        // Ping backend on load
-        fetch('/query?q=ping', { method: 'POST' })
-            .then(() => document.getElementById('status').textContent = '✓ Up')
-            .catch(() => document.getElementById('status').textContent = '✗ Down');
+        loadStats();
+        setInterval(loadStats, 30000);
     </script>
 </body>
 </html>
