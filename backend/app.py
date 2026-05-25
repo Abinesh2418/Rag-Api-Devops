@@ -159,8 +159,6 @@ def query(q: str):
             response = azure_client.chat.completions.create(
                 model=os.getenv("AZURE_OPENAI_MODEL", "gpt-4o"),
                 messages=messages,
-                tools=TOOLS,
-                tool_choice="auto",
                 timeout=30,
             )
 
