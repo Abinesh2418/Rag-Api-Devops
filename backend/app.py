@@ -1,7 +1,7 @@
 import json
 import os
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from openai import AzureOpenAI
@@ -133,6 +133,8 @@ def metrics():
 @app.post("/query")
 def query(q: str):
     print(f"[QUERY] Received: '{q}'")
+    if not q.strip():
+        raise HTTPException(status_code=400, detail="Query parameter 'q' cannot be empty.")
     with rag_query_duration_seconds.time():
         rag_queries_total.inc()
         context = get_context(q)
